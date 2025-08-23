@@ -1,27 +1,24 @@
 import os
 import httpx
 import itertools
-import certifi  # <--- 這是新增的第一行
+import certifi
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import StreamingResponse
-# --- 配置区 ---
 
-# 1. 你的代理服务的API Key，客户端连接时需要提供这个Key
-PROXY_API_KEY = "123456" # 请务必修改成一个复杂且安全的密钥
-
-# 2. 你的Google Gemini API Key 池
-GEMINI_API_KEYS = [
-    "AIzaSyAFeywFR_te1isEPmdupiZQgAqlW-KK_jQ",
-    "AIzaSyBOAwfms4DHzQa-mf2PqSXL-5V-1vKo42o",
-    "AIzaSyA5DjXI2pbhkIhemPMbd9EZ5wsmL7_W38g",
-    # ... 在这里添加更多你的Gemini API Key
-]
-
+# --- 配置區 ---
+# 從環境變量中讀取密鑰，這是在雲端部署的標準做法
+# 我們將在 Render 的儀表板上設置這些值
+PROXY_API_KEY = os.getenv("PROXY_API_KEY")
+GEMINI_API_KEYS_STR = os.getenv("GEMINI_API_KEYS")
 
 # --- 代碼正文 (無需修改) ---
 
-if not GEMINI_API_KEYS or "YOUR_GEMINI_API_KEY_THAT_WORKED_IN_CURL" in GEMINI_API_KEYS:
-    raise ValueError("請在 GEMINI_API_KEYS 列表中配置你用 curl 測試成功的 Gemini API Key")
+# 檢查環境變量是否已設置
+if not PROXY_API_KEY or not GEMINI_API_KEYS_STR:
+    raise ValueError("環境變量 PROXY_API_KEY 和 GEMINI_API_KEYS 未設置")
+
+# 將逗號分隔的密鑰字符串轉換為列表
+GEMINI_API_KEYS = [key.strip() for key in GEMINI_API_KEYS_STR.split(',')]
 
 key_cycler = itertools.cycle(GEMINI_API_KEYS)
 GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com"
@@ -48,14 +45,15 @@ async def proxy_gemini(request: Request, api_version: str, model: str):
          raise HTTPException(status_code=404, detail="API version not supported")
 
     selected_gemini_key = next(key_cycler)
-    print(f"--- 密鑰匹配成功! 正在使用密鑰: ...{selected_gemini_key[-4:]} 轉發請求 ---")
+    print(f"--- 密鑰匹配成功! 正在使用密鑰: ...{selected_gemini_key[-4:]} 轉發請求 (協議: HTTP/1.1) ---")
     
     original_path = request.url.path
     target_url = f"{GEMINI_API_BASE_URL}{original_path}?key={selected_gemini_key}"
     request_body = await request.json()
     
-    # 【最終修正】: 明確指定 SSL 證書進行驗證
-    async with httpx.AsyncClient(verify=certifi.where()) as client: # <--- 這是修改的第二行
+    transport = httpx.AsyncHTTPTransport(http1=True, http2=False)
+    
+    async with httpx.AsyncClient(transport=transport, verify=certifi.where()) as client:
         try:
             google_req = client.build_request("POST", target_url, json=request_body, timeout=120.0)
             google_res = await client.send(google_req, stream=True)
@@ -75,6 +73,4 @@ async def proxy_gemini(request: Request, api_version: str, model: str):
 def read_root():
     return {"status": "Gemini API Proxy is running"}
 
-import uvicorn
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+# 在 Render 上，我們不需要 uvicorn.run()，因為 Render 會用自己的命令啟動服務

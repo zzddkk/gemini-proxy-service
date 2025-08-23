@@ -5,7 +5,7 @@ import time
 # --- 配置區: 請根據您的部署情況修改這裡 ---
 
 # 1. 您的代理服務的公開URL (本地測試請使用 http://127.0.0.1:8000)
-PROXY_URL = "http://127.0.0.1:8000"
+PROXY_URL = "https://gemini-proxy-txtw.onrender.com"
 
 # 2. 您在 proxy.py 中設置的那個代理密鑰 (PROXY_API_KEY)
 CORRECT_PROXY_KEY = "123456"

@@ -129,8 +129,8 @@ async def proxy_gemini_stream(request: Request, api_version: str, model: str):
                         if response.status_code == 200:
                             # 請求成功，開始轉發數據流
                             print(f"--- 密鑰 ...{selected_gemini_key[-4:]} 流式請求成功 ---")
-                            print(f"--- 收到原始 chunk: {chunk.decode('utf-8', errors='ignore')} ---")
                             async for chunk in response.aiter_bytes():
+                                print(f"--- 收到原始 chunk: {chunk.decode('utf-8', errors='ignore')} ---")
                                 yield chunk
                             return # 成功結束生成器
                         else:
